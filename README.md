@@ -1,4 +1,4 @@
-ProofAssistant
-==============
+Proof Assistant
+===============
 
 A proof assistant
