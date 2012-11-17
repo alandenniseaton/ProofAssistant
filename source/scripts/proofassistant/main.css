@@ -6,7 +6,13 @@
         Purpose of the stylesheet follows.
 */
 
-root { 
-    display: block;
+body {
+    font-size: 100%;
+    font-family: monospace;
+}
+
+.annotation {
+    color: gray;
+    font-style: italic;
 }
 

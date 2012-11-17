@@ -13,7 +13,8 @@ btk.define({
     name: 'main@proofassistant',
     load: true,
     libs: {
-        base: 'base@common'
+        base: 'base@common',
+        logic: 'logic@proofassistant'
     },
     css: [
         'main@proofassistant'
@@ -24,5 +25,5 @@ btk.define({
     init: function(libs, exports) {
 
         //---------------------------------------------------------
-    }
-});
+    }   // end init
+}); // end define
