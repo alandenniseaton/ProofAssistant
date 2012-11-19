@@ -1,0 +1,13 @@
+
+--------------------------------------------------------------------------------
+121118:2133
+add a slot proof element.
+will allow intro to work for constant propositions.
+
+    proof.show(P & _)
+    proof.elimLeft()
+
+??? should slots unify
+    unification is tricky if backtracking is allowed.
+
+--------------------------------------------------------------------------------

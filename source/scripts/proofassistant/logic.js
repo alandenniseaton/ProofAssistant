@@ -17,29 +17,70 @@ btk.define({
     init: function(libs, exports) {
         
         //---------------------------------------------------------
-        var page = btk.global.page || {};
-        btk.global.page = page;
+        var page = btk.global.page;
+        
+        
+        var isString = btk.isString;
+        var isNumber = btk.isNumber;
+        var isArray = btk.isArray;
+        
+        var ifNumber = btk.ifNumber;
+        var ifString = btk.ifString;
+        var ifArray = btk.ifArray;
         
         var inherits = btk.inherits;
         
+        
         var de = libs.de;
+        
         
         var l = exports;
         page.logic = l;
         
+        
         //---------------------------------------------------------
-        function ProofError(msg) {
-            this.message = msg;
+        function info(msg) {
+            console.info(msg);
+        }
+        
+        function log(text) {
+            var l = text.length;
+            var line;
+                    
+            for (var i=0; i<l; i++) {
+                line = text[i];
+                        
+                if (isArray(line)) {
+                    log(line);
+                }
+                else {
+                    info(line);
+                }
+            }
+        }
+        
+        
+        //---------------------------------------------------------
+        function ProofError(element, method, msg) {
+            var text = [
+                element.klass,
+                element.indexString(),
+                '.',
+                method,
+                ': ',
+                msg
+            ];
+            
+            this.message = text.join('');
         }
         inherits(ProofError, Error);
         l.ProofError = ProofError;
         
         
         //---------------------------------------------------------
-        function Annotation(sources, aklass, text) {
-            this.sources = btk.ifArray(sources, [sources]);
-            this.aklass = btk.ifString(aklass,'');
-            this.text = btk.ifString(text,'');
+        function Annotation(sources,text) {
+            this.sources = ifArray(sources, [sources]);
+            this.text = ifString(text,'');
         }
         inherits(Annotation, Object);
         l.Annotation = Annotation;
@@ -48,29 +89,26 @@ btk.define({
         (function(p){
             p.klass = 'Annotation';
             
-            function stringifySources(ii) {
+            function stringifySources(ss) {
                 var si = [];
                 
-                var l = ii.length;
-                for (var i=0; i<l; i++) {
-                    si.push(ii[i].getFullIndex().join('.'));
+                for (var i=0,l=ss.length; i<l; i++) {
+                    si.push(ss[i].indexString());
                 }
-                si = si.join(',');
+                si = si.join(', ');
                 
-                return si + ':';
+                return si;
             }
             
             p.toString = function() {
-                var s = [];
+                var s = ['#'];
+                
+                if (this.text) {
+                    s.push(this.text);
+                }
                 
                 if (this.sources.length > 0) {
                     s.push(stringifySources(this.sources));
-                }
-                if (this.aklass) {
-                    s.push(this.aklass);
-                }
-                if (this.text) {
-                    s.push(this.text);
                 }
                 
                 return s.join(' ');
@@ -95,7 +133,6 @@ btk.define({
         
         function ProofElement() {
             this.id = peSequence.next();
-            this.index = -1;
         }
         inherits(ProofElement, Object);
         l.ProofElement = ProofElement;
@@ -103,12 +140,39 @@ btk.define({
         (function(p){
             p.klass = 'ProofElement';
             
+            p.error = function(method, msg) {
+                return new ProofError(this, method, msg);
+            };
+            
+            p.isProposition = function() {
+                return false;
+            };
+            
+            p.isProof = function() {
+                return false;
+            };
+            
+            
             p.getParent = function() {
                 return this.parent;
             };
             
             p.setParent = function(parent) {
                 this.parent = parent;
+                if (parent) {
+                    this.setTop(parent.getTop());
+                }
+                else {
+                    this.setTop(this);
+                }
+            };
+            
+            p.getTop = function() {
+                return this.top || this;
+            };
+            
+            p.setTop = function(top) {
+                this.top = top;
             };
             
             p.getIndex = function() {
@@ -117,11 +181,10 @@ btk.define({
  
             p.getFullIndex = function() {
                 var p = this.getParent();
-                var i = p?p.getFullIndex():[];
+                var i = p? p.getFullIndex(): [];
                 
-                var j = this.index;
-                if (j >= 0) {
-                    i.push(j);
+                if (this.isIndexed()) {
+                    i.push(this.getIndex());
                 }
                 
                 return i;
@@ -131,6 +194,25 @@ btk.define({
                 this.index = i;
             };
             
+            p.isIndexed = function() {
+                return isNumber(this.getIndex());
+            };
+
+            p.indexString = function() {
+                return '(' + this.getFullIndex().join('.') + ')';
+            };
+            
+            p.indexPadding = function() {
+                var pad = new Array(this.indexString().length + 1);
+                
+                return pad.join(' ');
+            };
+            
+            p.level = function() {
+                return this.getFullIndex().length;
+            }
+            
+            
             p.getAnnotation = function() {
                 return this.annotation || '';
             };
@@ -138,6 +220,23 @@ btk.define({
             p.setAnnotation = function(annotation) {
                 this.annotation = annotation;
             };
+            
+            p.removeAnnotation = function() {
+                this.setAnnotation(null);
+            };
+            
+            p.annotate = function(indicies,text) {
+                this.setAnnotation(new Annotation(indicies,text));
+                this.log();
+                
+                this.getTop().onAnnotation(this);
+            };
+            
+            
+            p.copy = function() {
+                return this;
+            };
+            
             
             p.is = function(other) {
                 if (other.id == this.id) {
@@ -151,13 +250,41 @@ btk.define({
                 return !this.is(other);
             };
             
+            
             p.toText = function() {
-                return this.toString();
+                var text = [];
+                
+                var line = [
+                    this.indexString(),
+                    this.toString()
+                ].join(' ');
+                
+                text.push(line);
+                
+                var anno = this.getAnnotation();
+                if (anno) {
+                    var note = [
+                        this.indexPadding(),
+                        anno.toString()
+                    ].join(' ');
+                    
+                    text.push(note);
+                }
+                
+                return text;
             };
             
             p.toHTML = function() {
-                return this.toString();
+                return this.list();
             };
+            
+            p.list = function() {
+                var text = this.toText();
+                
+                log(text);
+            };
+            
+            p.log = p.list;
             
         })(ProofElement.prototype);
         
@@ -165,7 +292,8 @@ btk.define({
         //---------------------------------------------------------
         function Comment(text) {
             Comment.SUPERCLASS.call(this);
-            this.text = btk.ifArray(text, [text]);
+            
+            this.text = ifArray(text, [text]);
         }
         inherits(Comment, ProofElement);
         l.Comment = Comment;
@@ -175,11 +303,27 @@ btk.define({
             p.klass = 'Comment';
             
             p.toString = function() {
-                return this.text.join('\n');
+                var input = this.text;
+                var output = [];
+                
+                for (var i=0, l=input.length; i<l; i++) {
+                    output.push('# ' + input[i]);
+                }
+                
+                return output.join('\n');
             };
             
             p.toText = function() {
-                return this.text;
+                var index = this.indexString();
+                var input = this.text;
+                var length = input.length;
+                var output = [];
+                
+                for(var i=0; i<length; i++) {
+                    output.push(index + ' # ' + input[i]);
+                }
+                
+                return output;
             };
             
         })(Comment.prototype);
@@ -192,6 +336,10 @@ btk.define({
             this.statements = [];
             this.tasks = {};
             this.closed = false;
+            
+            this.onAppend = btk.nothing;
+            this.onAnnotation = btk.nothing;
+            this.onClose = btk.nothing;
         }
         inherits(Proof, ProofElement);
         l.Proof = Proof;
@@ -200,15 +348,22 @@ btk.define({
             
             p.klass = 'Proof';
             
+            p.isProof = function() {
+                return true;
+            };
+
+            p.isClosed = function() {
+                return this.closed;
+            }
+            
             p.getCurrent = function() {
                 var i = this.statements.length - 1;
                 
                 if (i < 0) {
-                    return this.getTarget() || this.getRoot();
+                    throw this.error('getCurrent: empty proof');
                 }
-                else {
-                    return this.statements[i];
-                }
+                
+                return this.statements[i];
             };
             
             p.addTask = function(proof) {
@@ -221,37 +376,35 @@ btk.define({
             
             
             p.append = function(P) {
-                var i = this.statements.push(P);
+                var Q = (P.isProposition() && P.isIndexed())? P.copy(): P;
+                var i = this.statements.push(Q);
                 
-                P.setIndex(i-1);
-                P.setParent(this);
+                Q.setIndex(i-1);
+                Q.setParent(this);
                 
-                return P;
-            };
-            
-            p.annotate = function(indicies, klass, text) {
-                var P = this.getCurrent();
-                if (P) {
-                    P.setAnnotation(new l.Annotation(indicies, klass, text));
-                }
+                this.getTop().onAppend(Q);
+                
+                return Q;
             };
             
             p.comment = function(text) {
-                var c = new l.Comment(text);
+                var c = new Comment(text);
                 this.append(c);
+                
                 return c;
             };
             
+            p.assume = function(P) {
+                var Q = this.append(P);
+                Q.annotate([],'Assumption');
+                
+                return Q;
+            };
             
-            p.find = function(P) {
-                if (P.getIndex() >= 0) {
-                    return P;
-                }
-                
+            p.find = function(P,i) {
                 var s = this.statements;
-                var l = s.length;
                 
-                var i = l-1;
+                i = ifNumber(i, s.length-1);
                 while (i >= 0) {
                     if (s[i].is(P)) {
                         return s[i];
@@ -259,17 +412,8 @@ btk.define({
                     i--;
                 }
                 
-                if (this.root) {
-                    if (this.root.is(P)) {
-                        return this.root;
-                    }
-                }
-                
-                // only finding proven propositions
-                // so don't check targets
-                
                 if (this.parent) {
-                    return this.parent.find(P);
+                    return this.parent.find(P, this.getIndex());
                 }
                 
                 return null;
@@ -277,104 +421,102 @@ btk.define({
             
             p.show = function(P) {
                 var Q = this.find(P);
-                if (!Q) {
-                    var goalproof = new l.GoalProof(P);
+                var R;
+                
+                if (Q) {
+                    if (Q.level() <= this.level()) {
+                        R = this.append(P);
+                        R.annotate([Q],'import');
+                    }
+                    else {
+                        R = Q;
+                    }
+                }
+                else {
+                    var goalproof = new GoalProof(P);
                     
                     this.append(goalproof);
+                    goalproof.annotate([],'OPEN');
 
-                    Q = this.append(P.copy());
-                    this.annotate([goalproof],goalproof.klass,'export');
+                    R = this.append(goalproof.getTarget());
+                    R.annotate([goalproof],'to show');
                     
                     this.addTask(goalproof);
                 }
                 
-                return Q;
+                return R;
             };
             
             p.from = function(P) {
                 var subproof = new Subproof(P);
                 
-                return this.append(subproof);
+                this.append(subproof);
+                subproof.annotate([],'OPEN');
+                
+                return subproof;
             };
             
 
 
-            p.introLeft = function(X) {
+            p.intro = function(X,Y) {
                 var P = this.getCurrent();
-                if (!P) {
-                    return null;
-                }
                 
-                var intro = P.tactic.intro.left;
-                
-                var Q = intro.call(P,this,X);
-                
-                return Q;
-            };
-            
-            p.introRight = function(X) {
-                var P = this.getCurrent();
-                if (!P) {
-                    return null;
-                }
-                
-                var intro = P.tactic.intro.right;
-                
-                var Q = intro.call(P,this,X);
-                
-                return Q;
-            };
-            
-            p.intro = function(X) {
-                return this.introLeft(X);
+                return P.intro(this,X,Y);
             };
 
+            p.introLeft = function(X,Y) {
+                var P = this.getCurrent();
+                
+                return P.introLeft(this,X,Y);
+            };
+            
+            p.introRight = function(X,Y) {
+                var P = this.getCurrent();
+                
+                return P.introRight(this,X,Y);
+            };
+            
 
-            p.elimLeft = function(X) {
+            p.elim = function(X,Y) {
                 var P = this.getCurrent();
-                if (!P) {
-                    return null;
-                }
                 
-                var elim = P.tactic.elim.left;
-                
-                var Q = elim.call(P,this,X);
-                
-                return Q;
-            };
-            
-            p.elimRight = function(X) {
-                var P = this.getCurrent();
-                if (!P) {
-                    return null;
-                }
-                
-                var elim = P.tactic.elim.right;
-                
-                var Q = elim.call(P,this,X);
-                
-                return Q;
-            };
-            
-            p.elim = function(X) {
-                return this.elimLeft(X);
+                return P.elim(this,X,Y);
             }
+            
+            p.elimLeft = function(X,Y) {
+                var P = this.getCurrent();
+                
+                return P.elimLeft(this,X,Y);
+            };
+            
+            p.elimRight = function(X,Y) {
+                var P = this.getCurrent();
+                
+                return P.elimRight(this,X,Y);
+            };
             
             
             p.line = function(i) {
-                if (btk.isString(i)) {
-                    i = i.split('.');
+                var ii;
+                
+                if (isNumber(i)) {
+                    ii = [i];
+                }
+                else if (isString(i)) {
+                    ii = i.split('.');
+                }
+                else {
+                    ii = ifArray(i,[0]);
                 }
                 
-                i = btk.ifArray(i,[0]);
-                
-                var p = this;
+                var l = ii.length;
                 var j = 0;
                 var k;
-                while (j < i.length && p && p.statements) {
-                    k = i[j];
+                var p = this;
+                while (j < l && p && p.statements) {
+                    k = ii[j];
                     if (k < p.statements.length) {
-                        p = p.statements[i[j]];
+                        p = p.statements[k];
                     }
                     else {
                         p = null;
@@ -387,44 +529,33 @@ btk.define({
             };
             
             
+            p.textHead = function() {
+                return [];
+            };
+            
             p.bodyToText = function() {
                 var body = [];
-                
                 var s = this.statements;
                 var l = s.length;
-                for (var i=0; i < l; i++) {
-                    var annotation = s[i].getAnnotation();
-                    if (annotation) {
-                        annotation = ' # ' + annotation.toString();
-                    }
-                    body.push([
-                        '(', s[i].getFullIndex().join('.'), ') ',
-                        s[i].toString(),
-                        annotation
-                    ].join(''));
+                
+                for (var i=0; i<l; i++) {
+                    body.push(s[i].toText());
                 }
                 
                 return body;
             }
-            
-            p.toText = p.bodyToText;
-            
-            p.list = function() {
-                function output(lines) {
-                    var l = lines.length;
-                    for (var i=0; i<l; i++) {
-                        if (btk.isString(lines[i])) {
-                            console.info(lines[i]);
-                        }
-                        else {
-                            output(lines[i]);
-                        }
-                    }
-                }
+
+            p.toText = function() {
+                var text = [
+                    this.textHead(),
+                    this.bodyToText()
+                ];
                 
-                var text = this.toText();
-                
-                output(text);
+                return text;
+            };
+            
+            p.log = function() {
+                log(this.textHead());
             };
             
             p.toString = function() {
@@ -440,7 +571,8 @@ btk.define({
         function Subproof(root) {
             Subproof.SUPERCLASS.call(this);
             
-            this.setRoot(root);
+            var P = root.isIndexed()? root.copy(): root;
+            this.setRoot(P);
         }
         inherits(Subproof, Proof);
         l.Subproof = Subproof;
@@ -454,39 +586,92 @@ btk.define({
             };
             
             p.setRoot = function(root) {
+                if (this.root) {
+                    throw this.error('setRoot','already set');
+                }
+                
                 this.root = root;
                 root.setParent(this);
             };
             
-            p.close = function() {
-                var parent = this.getParent();
+            p.getCurrent = function() {
+                var i = this.statements.length - 1;
                 
-                if (this.closed) {
-                    console.log('Subproof.close: already closed');
-                    return parent;
+                if (i < 0) {
+                    return this.getRoot();
                 }
-                
-                var current = this.getCurrent();
-                var intro = new l.Conditional(this.getRoot(), current);
-                var i = this.getIndex();
-                if (!intro.is(parent.statements[i+1])) {
-                    parent.append(intro);
-                    parent.annotate([this,current],intro.klass,'introduction');
+                else {
+                    return this.statements[i];
                 }
-                this.closed = true;
-                parent.removeTask(this);
-
-                return parent;
-                
             };
             
-            p.toText = function() {
-                var body = this.bodyToText();
+            p.superAppend = Subproof.SUPER.append;
+            
+            p.append = function(P) {
+                if (this.isClosed()) {
+                    throw this.error('append','already closed');
+                }
                 
-                var text = [
-                    'from ' + this.getRoot().toString(),
-                    body
-                ];
+                return this.superAppend(P);
+            };
+            
+            p.assume = function() {
+                throw this.error('assume','not a top level proof');
+            };
+            
+            p.superFind = Subproof.SUPER.find;
+            
+            p.find = function(P,i) {
+                var root = this.getRoot();
+                
+                if (root.is(P)) {
+                    return root;
+                }
+                
+                return this.superFind(P,i);
+            };
+            
+            p.close = function() {
+                if (this.isClosed()) {
+                    throw this.error('close','already closed');
+                }
+                
+                var parent = this.getParent();
+                var current = this.getCurrent();
+                var intro = new Conditional(this.getRoot(), current);
+                var s = parent.statements[this.getIndex()+1];
+                
+                if (!s || !intro.is(s)) {
+                    var i = parent.append(intro);
+                    i.annotate([this,current],'Conditional introduction');
+                }
+                
+                this.closed = true;
+                parent.removeTask(this);
+                
+                this.removeAnnotation();
+                
+                return parent;
+            };
+            
+            p.textHead = function() {
+                var head = [
+                    this.indexString(),
+                    'from',
+                    this.getRoot().toString(),
+                ].join(' ');
+                
+                var text = [head];
+                
+                var anno = this.getAnnotation();
+                if (anno) {
+                    var note = [
+                        this.indexPadding(),
+                        anno.toString()
+                    ].join(' ');
+                    
+                    text.push(note);
+                }
                 
                 return text;
             };
@@ -498,6 +683,7 @@ btk.define({
         function GoalProof(target) {
             GoalProof.SUPERCLASS.call(this);
             
+            var P = target.isIndexed()? target.copy(): target;
             this.setTarget(target);
         }
         inherits(GoalProof, Proof);
@@ -512,28 +698,57 @@ btk.define({
             };
             
             p.setTarget = function(target) {
+                if (this.target) {
+                    throw this.error('setTarget','already set');
+                }
+                
                 this.target = target;
                 target.setParent(this);
             };
             
-            p.append = function(P) {
-                var Q = GoalProof.SUPER.append.call(this,P);
+            p.getCurrent = function() {
+                var i = this.statements.length - 1;
                 
-                if (P.is(this.getTarget())) {
+                if (i < 0) {
+                    return this.getTarget();
+                }
+                else {
+                    return this.statements[i];
+                }
+            };
+            
+            p.assume = function() {
+                throw this.error('assume','not a top level proof');
+            };
+            
+            p.superAppend = GoalProof.SUPER.append;
+            
+            p.append = function(P) {
+                if (this.isClosed()) {
+                    throw this.error('append','already closed');
+                }
+                
+                var Q = this.superAppend.call(this,P);
+                
+                if (Q.is(this.getTarget())) {
                     this.close();
                 }
                 
                 return Q;
             };
+
+            // We don't want to find targets since they may
+            // not have been shown yet.
+            // Use the inherited method.
+            // 
+            // p.find = function(P,i) {}
             
             p.close = function() {
-                var parent = this.getParent();
-                
-                if (this.closed) {
-                    console.log('GoalProof.close: already closed');
-                    return parent;
+                if (this.isClosed()) {
+                    throw this.error('append','already closed');
                 }
                 
+                var parent = this.getParent();
                 var target = this.getTarget();
                 var current = this.getCurrent();
                 if (current.id != target.id && current.is(target)) {
@@ -542,22 +757,39 @@ btk.define({
                     this.closed = true;
                     parent.removeTask(this);
 
+                    this.removeAnnotation();
+
+                    target.annotate([this],'shown');
+                    
+                    this.getTop().onClose(this);
+                    
                     return parent;
                 }
                 else {
-                    throw new ProofError('GoalProof.close: target has not been shown');
+                    throw this.error('close','target has not been shown');
                 }
                 
                 return this;
             };
             
-            p.toText = function() {
-                var body = this.bodyToText();
+            p.textHead = function() {
+                var head = [
+                    this.indexString(),
+                    'show',
+                    this.getTarget().toString(),
+                ].join(' ');
                 
-                var text = [
-                    'show ' + this.getTarget().toString(),
-                    body
-                ];
+                var text = [head];
+                
+                var anno = this.getAnnotation();
+                if (anno) {
+                    var note = [
+                        this.indexPadding(),
+                        anno.toString()
+                    ].join(' ');
+                    
+                    text.push(note);
+                }
                 
                 return text;
             };
@@ -581,6 +813,10 @@ btk.define({
         (function(p) {
             p.klass = 'Proposition';
             
+            p.isProposition = function() {
+                return true;
+            };
+            
         })(Proposition.prototype);
         
         
@@ -595,30 +831,27 @@ btk.define({
         (function(p) {
             p.klass = 'ConstantProposition';
             
+            p.copy = function() {
+                return new ConstantProposition(this.name);
+            };
+            
+            
             // intro and elim do not make sense for constant propositions
             
-            p.copy = function() {
-                return new l.ConstantProposition(this.name);
-            };
-            
-            
-            p.tactic = {
-                'intro': {},
-                'elim': {}
-            };
-            
-            p.tactic.intro.left = function(proof) {
-                throw new ProofError('ConstantProposition.intro: illegal');
+            p.intro = function(proof) {
+                throw this.error('intro','illegal');
             }
-            p.tactic.intro.left.params = 0;
-            p.tactic.intro.right = p.tactic.intro.left;
+            p.intro.params = 0;
+            p.intro.left = p.intro;
+            p.intro.right = p.intro;
             
             
-            p.tactic.elim.left = function(proof) {
-                throw new ProofError('ConstantProposition.elim: illegal');
+            p.elim = function(proof) {
+                throw this.error('elim','illegal');
             };
-            p.tactic.elim.left.params = 0;
-            p.tactic.elim.right = p.tactic.elim.left;
+            p.elim.params = 0;
+            p.elim.left = p.elim;
+            p.elim.right = p.elim;
             
             
             p.is = function(other) {
@@ -666,15 +899,11 @@ btk.define({
                     return false;
                 }
                 
-                if (other.left.isnt(this.left)) {
-                    return false;
+                if (other.left.is(this.left) && other.right.is(this.right)) {
+                    return true;
                 }
                 
-                if (other.right.isnt(this.right)) {
-                    return false;
-                }
-                
-                return true;
+                return false;
             };
 
             p.toString = function() {
@@ -703,7 +932,7 @@ btk.define({
             p.klass = 'Conditional';
             
             p.copy = function() {
-                return new l.Conditional(this.left.copy(), this.right.copy());
+                return new Conditional(this.left.copy(), this.right.copy());
             };
             
             
@@ -715,34 +944,30 @@ btk.define({
             // there is only one of each for Conditionals
             // so left and right will be the same
             
-            p.tactic = {
-                'intro': {},
-                'elim': {}
-            };
-            
-            
-            p.tactic.intro.left = function(proof) {
+            p.intro = function(proof) {
                 var subproof = proof.from(this.left);
+                
                 subproof.show(this.right);
+                subproof.close();
                 
-                var j = subproof.close();
-                
-                return j;
+                return proof.getCurrent();
             };
-            p.tactic.intro.left.params = 0;
-            p.tactic.intro.right = p.tactic.intro.left;
+            p.intro.params = 0;
+            p.introLeft = p.intro;
+            p.introRight = p.intro;
             
-            
-            p.tactic.elim.left = function(proof) {
+
+            p.elim = function(proof) {
                 var i = proof.show(this.left);
-                
                 var j = proof.append(this.right);
-                proof.annotate([i,this],this.klass,'elimination');
+                
+                j.annotate([i,this],'Conditional elimination');
                 
                 return j;
             };
-            p.tactic.elim.left.params = 0;
-            p.tactic.elim.right = p.tactic.elim.left;
+            p.elim.params = 0;
+            p.elimLeft = p.elim;
+            p.elimRight = p.elim;
                 
         })(l.Conditional.prototype);
         
@@ -762,47 +987,45 @@ btk.define({
             };
             
             
-           p.op = {
+            p.op = {
                 'text': '&',
                 'html': '&'
             };
             
             
-            p.tactic = {
-                'intro': {},
-                'elim': {}
-            };
-            
-            
             // only one intro tactic
-            p.tactic.intro.left = function(proof) {
-                var i = proof.show(this.left.copy());
-                var j = proof.show(this.right.copy());
+            
+            p.intro = function(proof) {
+                var i = proof.show(this.left);
+                var j = proof.show(this.right);
                 
-                var k = proof.append(this.copy());
-                proof.annotate([i,j],k.klass,'introduction');
+                var k = proof.append(this);
+                k.annotate([i,j],'Conjunction introduction');
                 
                 return i;
             };
-            p.tactic.intro.left.params = 0;
-            p.tactic.intro.right = p.tactic.intro.left;
+            p.intro.params = 0;
+            p.introLeft = p.intro;
+            p.introRight = p.intro.left;
             
             
-            p.tactic.elim.left = function(proof) {
-                var i = proof.append(this.left.copy());
-                proof.annotate([this],'left projection');
+            p.elimLeft = function(proof) {
+                var i = proof.append(this.left);
+                i.annotate([this],'left projection');
                 
                 return i;
             };
-            p.tactic.elim.left.params = 0;
+            p.elimLeft.params = 0;
                 
-            p.tactic.elim.right = function(proof) {
-                var i = proof.append(this.right.copy());
-                proof.annotate([this],'right projection');
+            p.elimRight = function(proof) {
+                var i = proof.append(this.right);
+                i.annotate([this],'right projection');
                 
                 return i;
             };
-            p.tactic.elim.right.params = 0;
+            p.elimRight.params = 0;
+            
+            p.elim = p.elimLeft;
                 
         })(l.Conjunction.prototype);
         
@@ -827,127 +1050,50 @@ btk.define({
                 'html': '|'
             };
             
-            p.tactic = {
-                'intro': {},
-                'elim': {}
-            };
             
-            
-            p.tactic.intro.left = function(proof) {
-                var i = proof.show(this.left.copy());
+            p.introLeft = function(proof) {
+                var i = proof.show(this.left);
                 
-                var j = proof.append(this.copy());
-                proof.annotate([i],'left injection');
+                var j = proof.append(this);
+                j.annotate([i],'left injection');
                 
                 return j;
             };
-            p.tactic.intro.left.params = 0;
+            p.introLeft.params = 0;
             
-            p.tactic.intro.right = function(proof) {
-                var i = proof.show(this.right.copy());
+            p.introRight = function(proof) {
+                var i = proof.show(this.right);
                 
-                var j = proof.append(this.copy());
-                proof.annotate([i],'right injection');
+                var j = proof.append(this);
+                j.annotate([i],'right injection');
                 
                 return j;
             };
-            p.tactic.intro.right.params = 0;
+            p.introRight.params = 0;
                 
+            p.intro = p.introLeft;
+            
             // only one of these
-            p.tactic.elim.left = function(proof,X) {
+            
+            p.elim = function(proof,X) {
                 if (!X) {
-                    throw new ProofError(this.klass + '.elim: missing parameter');
+                    throw this.error('elim: missing parameter');
                 }
-                var i = proof.show(new l.Conditional(this.left,X));
-                var j = proof.show(new l.Conditional(this.right,X));
+                var i = proof.show(new Conditional(this.left,X));
+                var j = proof.show(new Conditional(this.right,X));
                 
-                var k = proof.append(X.copy());
-                proof.annotate([this,i,j],this.klass,'elimination');
+                var k = proof.append(X);
+                k.annotate([this,i,j],'Disjunction elimination');
                 
                 return k;
             };
-            p.tactic.elim.left.params = 1;
-            p.tactic.elim.right = p.tactic.elim.left;
+            p.elim.params = 1;
+            p.elimLeft = p.elim;
+            p.elimRight = p.elim;
             
         })(l.Disjunction.prototype);
         
         
-        //---------------------------------------------------------
-        l.prop = function(p) {
-            var P = l.prop.cache[p];
-            if (!P) {
-                P = new l.ConstantProposition(p);
-                l.prop.cache[p] = P;
-            }
-            return P;
-        };
-        l.prop.cache = {};
-        
-        l.wrap = function(p) {
-            if (p instanceof l.Proposition) {
-                return p;
-            }
-            
-            if (btk.isString(p)) {
-                return l.prop(p);
-            }
-            
-            return l.error;
-        };
-        
-        l.not = function(p) {
-            return new l.Conditional(l.wrap(p),l.error);
-        };
-        
-        l.imp = function(p,q) {
-            return new l.Conditional(l.wrap(p),l.wrap(q));
-        };
-        
-        l.and = function(p,q) {
-            return new l.Conjunction(l.wrap(p),l.wrap(q));
-        };
-        
-        l.or = function(p,q) {
-            return new l.Disjunction(l.wrap(p),l.wrap(q));
-        };
-        
-        l.iff = function(p,q) {
-            return new l.and(l.imp(p,q),l.imp(q,p));
-        };
-        
-        
-        //---------------------------------------------------------
-        l.t = {};
-        
-        l.t.P = l.prop('P');
-        l.t.Q = l.prop('Q');
-        l.t.R = l.prop('R');
-        
-        l.t.PandQ = l.and('P', 'Q');
-        l.t.PorQ = l.or('P', 'Q');
-        l.t.PtoQ = l.imp('P', 'Q');
-        
-        l.t.pp = new l.Proof();
-        
-        btk.global.l = l;
-        btk.global.t = l.t;
-        
-        btk.global.pp = t.pp;
-        btk.global.p = t.PtoQ;
-        
-        pp.append(t.P);
-        pp.annotate([],'Assumption');
-        pp.append(t.PtoQ);
-        pp.annotate([],'Assumption');
-        pp.elim();
-        
-        l.t.pq = new l.Proof();
-        btk.global.pq = l.t.pq;
-        pq.append(l.imp(l.or('P','Q'),'R'));
-        pq.annotate([],'Assumption');
-        pq.show(l.imp(l.and('P','Q'),'R'));
-
-
         //---------------------------------------------------------
 
     }   // end init

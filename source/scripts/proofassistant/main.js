@@ -14,11 +14,8 @@ btk.define({
     load: true,
     libs: {
         base: 'base@common',
-        logic: 'logic@proofassistant'
+        test: 'test@proofassistant'
     },
-    css: [
-        'main@proofassistant'
-    ],
     when: [
         'state::document.loaded'
     ],

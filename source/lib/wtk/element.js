@@ -50,15 +50,15 @@ function dElement(tag, atts, children) {
 
 dElement.widgets = {};
 
-function element(tag, atts, children) {
+function element(tag, p1, p2, p3, p4) {
 	var creator = dElement.widgets[tag];
 	
 	if (creator) {
-		return new creator(atts, children);
+		return new creator(p1, p2, p3, p4);
 	}
 	
-	return new dElement(tag, atts, children);
-};
+	return new dElement(tag, p1, p2);
+}
 
 element.dElement = dElement;
 element.widgets = dElement.widgets;
@@ -280,6 +280,8 @@ element.widgets = dElement.widgets;
 			}
 		});
 		
+        this.view = element;
+        
 		return element;
 	};
 

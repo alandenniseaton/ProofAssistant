@@ -1,0 +1,93 @@
+/* 
+    Document   : main
+    Created on : 15/11/2012, 7:46:20 AM
+    Author     : Alan Dennis Eaton <alan.dennis.eaton@gmail.com>
+    Description:
+        Purpose of the stylesheet follows.
+*/
+
+body {
+    margin: 0;
+    font-size: 1.0em;
+    font-family: monospace;
+    background-color: white;
+}
+
+.wpconsole {
+    height: 15em;
+    background-color: lightsteelblue;
+}
+
+.wpframe {
+    border-width: 1px;
+    border-right: 0px;
+    border-style: solid;
+    border-color: transparent;
+}
+.wpframe.selected {
+    border-color: rgba(0,0,0,0.125);
+}
+.wpframe:hover {
+    border-color: rgba(0,0,0,0.125);
+}
+
+.wphead {
+    
+}
+.wphead.top {
+    color: blue;
+}
+.wphead.open {
+    color: red;
+}
+.wphead:hover {
+    background-color: rgba(0,0,0,0.125);
+}
+
+.wpbody {
+    
+}
+
+.wpline {
+    margin-bottom: 0.25em;
+}
+
+.wplindex {
+
+}
+
+.wplgap {
+    width: 1em;
+}
+
+.wplstatement {
+    
+}
+.wplstatement:hover {
+    background-color: rgba(0,0,0,0.125);
+}
+
+
+.wplannotation {
+    color: gray;
+    font-style: italic;
+    font-size: 75%;
+}
+
+
+.grey.terminal {
+    padding: 0px;
+
+    white-space: normal;
+
+    background-color: inherit;
+    color: black;
+
+    border-style: none;
+}
+.grey.terminal .log > *.info {
+    color: green;
+}
+.grey.terminal .commandline .prompt {
+    color: blue;
+}

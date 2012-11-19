@@ -170,7 +170,7 @@ function Terminal(atts) {
 				handler.call(terminal, event);
 			}
 		);
-	};
+	}
 	
 	p.on = function(eventName, handler) {
 		this.handlers[eventName] = handler;
