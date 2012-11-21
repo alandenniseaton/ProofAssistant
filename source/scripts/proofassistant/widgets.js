@@ -58,15 +58,37 @@ btk.define({
             
             this
                 .klass('wpview')
+                .klass('flex')
                 .klass('box')
                 .klass('vertical')
-                .child(de('wpframe', proof, controller))
+                .child(de('wptop', proof, controller))
                 .child(de('wpconsole', proof, controller))
                 ;
         }
         inherits(WPView, de.dElement);
         
         de.widgets.wpview = WPView;
+        
+        
+        //---------------------------------------------------------
+        function WPTop(proof, controller) {
+    		WPTop.SUPERCLASS.call(this, 'div');
+            
+            this
+                .klass('wptop')
+                .klass('flex')
+                .klass('box')
+                .klass('viewframe')
+                .start('div')
+                    .klass('viewport')
+                    .klass('scroll-plain')
+                    .child(de('wpframe', proof, controller))
+                .end()
+                ;
+        }
+        inherits(WPTop, de.dElement);
+        
+        de.widgets.wptop = WPTop;
         
         
         //---------------------------------------------------------
@@ -88,6 +110,7 @@ btk.define({
             
             this
                 .klass('wpconsole')
+                .klass('box')
                 .child(terminal)
                 ;
         }
@@ -101,16 +124,27 @@ btk.define({
     		WPFrame.SUPERCLASS.call(this, 'div');
             
             proof.widgets = proof.widgets || {};
-            proof.widgets.frame = this;
+            proof.widgets.root = this;
             
             this
                 .klass('wpframe')
                 .klass('flex')
                 .klass('box')
                 .klass('vertical')
+                .klass('stretch')
                 .child(de('wphead', proof, controller))
                 .child(de('wpbody', proof, controller))
                 ;
+            
+            proof.listen({
+                'close': function(value) {
+                    if (value.sender.id == proof.id) {
+                        if (this.view) {
+                            this.view.classList.remove('selected');
+                        }
+                    }
+                }
+            }, this)
         }
         inherits(WPFrame, de.dElement);
         
@@ -142,7 +176,6 @@ btk.define({
                 .klass('box')
                 .klass('vertical')
                 .child(mode + ' ' + head.toString())
-                //.child(de('wplannotation',proof))
                 .on('click', function() {
                     controller.onSelect(proof);
                 })
@@ -154,6 +187,17 @@ btk.define({
             else if (!proof.isClosed()) {
                 this.klass('open');
             }
+            
+            proof.listen({
+                'close': function(value) {
+                    if (value.sender.id == proof.id) {
+                        delete this._klasses['open'];
+                        if (this.view) {
+                            this.view.classList.remove('open');
+                        }
+                    }
+                }
+            }, this)
         }
         inherits(WPHead, de.dElement);
         
@@ -164,13 +208,11 @@ btk.define({
         function WPBody(proof, controller) {
     		WPBody.SUPERCLASS.call(this, 'div');
             
-            proof.widgets.body = this;
-            
             this
                 .klass('wpbody')
-                .klass('flex')
                 .klass('box')
                 .klass('vertical')
+                .klass('stretch')
                 ;
                 
             var ss = proof.statements;
@@ -179,6 +221,18 @@ btk.define({
             for(var i=0; i<l; i++) {
                 this.child(de('wpline',ss[i], controller));
             }
+            
+            proof.listen({
+                'append': function(value) {
+                    if (value.sender.id == proof.id) {
+                        var wpline = de('wpline',value.data, controller);
+                        this.child(wpline);
+                        if (this.view) {
+                            this.view.appendChild(wpline.create())
+                        }
+                    }
+                }
+            }, this);
         }
         inherits(WPBody, de.dElement);
         
@@ -199,11 +253,11 @@ btk.define({
                 .end()
                 ;
                 
-            if (pelement.isProof()) {
-                this.child(de('wpframe',pelement, controller));
+            if (pelement.isBlock()) {
+                this.child(de('wpframe',pelement,controller));
             }
             else {
-                this.child(de('wplstatement', pelement));
+                this.child(de('wplstatement',pelement,controller));
             }
         }
         inherits(WPLine, de.dElement);
@@ -226,29 +280,120 @@ btk.define({
         
         
         //---------------------------------------------------------
-        function WPLStatement(pelement) {
+        function WPLStatement(pelement, controller) {
     		WPLStatement.SUPERCLASS.call(this, 'div');
-            
-            pelement.widgets = {
-                'statement': this
-            }
             
             this
                 .klass('wplstatement')
+                .klass('flex')
                 .klass('box')
                 .klass('vertical')
-                .klass('flex')
-                .child(pelement.toString())
+                .on('click', function() {
+                    pelement.notify('statement.selection.request');
+                    //controller.onSelect(pelement);
+                })
                 ;
                 
-                if (pelement.getAnnotation()) {
-                    pelement.widgets.annotation = de('wplannotation',pelement);
-                    this.child(pelement.widgets.annotation);
+            this.pelement = pelement;
+
+            this.addProposition();
+            
+            this.addAnnotation();
+            
+            pelement.listen({
+                'annotate': function(value) {
+                    if (value.sender.id == this.pelement.id) {
+                        this.removeAnnotation();
+                        this.addAnnotation();
+                    }
                 }
+            }, this);
         }
         inherits(WPLStatement, de.dElement);
         
         de.widgets.wplstatement = WPLStatement;
+        
+        
+        (function(p){
+        
+            p.addProposition = function() {
+                var pel = this.pelement;
+                
+                var wprop = de('wplproposition', pel);
+                
+                if (this.view) {
+                    this.view.appendChild(wprop.create());
+                }
+                    
+                this.setElement('prop', wprop);
+            };
+            
+            p.addAnnotation = function() {
+                var pel = this.pelement;
+                
+                if (pel.getAnnotation()) {
+                    var wanno = de('wplannotation',pel);
+                    
+                    if (this.view) {
+                        this.view.appendChild(wanno.create());
+                    }
+                    
+                    this.setElement('anno', wanno);
+                }
+            };
+            
+            p.removeAnnotation = function() {
+                var wanno = this.getElement('anno');
+                
+                if (wanno) {
+                    if (this.view && wanno.view) {
+                        this.view.removeChild(wanno.view);
+                    }
+                    this.removeElement('anno');
+                }
+            };
+            
+            p.create = function() {
+                if (this.view) {
+                    return this.view;
+                }
+                
+                WPLStatement.SUPER.create.call(this);
+                
+                var wprop = this.getElement('prop');
+                if (wprop) {
+                    this.view.appendChild(wprop.create());
+                }
+                
+                var wanno = this.getElement('anno');
+                if(wanno) {
+                    this.view.appendChild(wanno.create());
+                }
+                
+                return this.view;
+            };
+            
+        	p.toNode = p.create;
+            
+        })(WPLStatement.prototype);
+        
+        
+        //---------------------------------------------------------
+        // TODO
+        // format the proposition nicely
+        function WPLProposition(pelement) {
+    		WPLProposition.SUPERCLASS.call(this, 'div');
+            console.log('WPLProposition');
+            
+            this
+                .klass('wplproposition')
+                .klass('box')
+                .child(pelement.toString())
+                ;
+        }
+        inherits(WPLProposition, de.dElement);
+        
+        de.widgets.wplproposition = WPLProposition;
         
         
         //---------------------------------------------------------
@@ -257,6 +402,7 @@ btk.define({
             
             this
                 .klass('wplannotation')
+                .klass('box')
                 .child(pelement.getAnnotation().toString())
                 ;
         }

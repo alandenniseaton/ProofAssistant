@@ -85,6 +85,11 @@ element.widgets = dElement.widgets;
 		return this;
 	};
 	
+	p.removeElement = function(pos) {
+		delete this._elements[pos];
+        return this;
+	};
+	
 	p.getParent = function() {
 		return this.getElement('parent');
 	};
@@ -212,6 +217,10 @@ element.widgets = dElement.widgets;
 	
 	// actually create the element
 	p.create = function() {
+        if (this.view) {
+            return this.view;
+        }
+        
 		set(this._atts,
 			'class',
 			(Object.keys(this._klasses)).join(' ')
@@ -243,16 +252,18 @@ element.widgets = dElement.widgets;
 			if (typeof child === "string") {
 				child = createTextNode(child);
 
-			} else if (child && typeof child == "object" && child.toNode) {
-				if (this._theme && child.theme) {
-					child.theme(this._theme);
-				}
-				
-				child = child.toNode();
-				
-				if (!(child instanceof Node)) {
-					child = null;
-				}
+			} else if (child && typeof child == "object") {
+                if (child.toNode) {
+                    if (this._theme && child.theme) {
+                        child.theme(this._theme);
+                    }
+
+                    child = child.toNode();
+
+                    if (!(child instanceof Node)) {
+                        child = null;
+                    }
+                }
 				
 			} else if (child instanceof Node) {
 				if (this._theme) {

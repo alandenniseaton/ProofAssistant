@@ -35,7 +35,7 @@ btk.define({
         function prop(p) {
             var P = l.prop.cache[p];
             if (!P) {
-                P = new l.ConstantProposition(p);
+                P = new l.ConstantStatement(p);
                 l.prop.cache[p] = P;
             }
             return P;
@@ -44,7 +44,7 @@ btk.define({
         l.prop.cache = {};
         
         function wrap(p) {
-            if (p instanceof l.Proposition) {
+            if (p instanceof l.Statement) {
                 return p;
             }
             
@@ -88,92 +88,151 @@ btk.define({
             this.top = proof;
             this.current = this.top;
             
-            proof.onAppend = this.onAppend.bind(this);
+            proof.listen({
+                'close': function(value) {
+                    this.onClose(value.sender);
+                },
+                'default': function(value, message) {
+                    this.info([
+                        'default handler: ',
+                        'type(', message.type, '), ',
+                        'parent',(value.parent).indexString(),', ',
+                        'sender',(value.sender).indexString(),''
+                    ].join(''));
+                }
+            }, this);
         }
-        
-        (function(p){
-            
-        })(Controller.prototype);
-        
         
         (function (p) {
             
             p.klass = 'Controller';
 
             p.up = function() {
-                this.current = this.current.getParent() || this.current;
-                this.current.log();
+                var pp = this.current.getParent() || this.current;
+                if (pp) {
+                    this.onSelect(pp);
+                }
+                
+                return this.current;
             };
             
             p.home = function() {
-                this.current = this.top;
-                this.current.log();
+                this.onSelect(this.top);
+                
+                return this.current;
             };
-            
 
             p.select = function(args) {
-                var pp = this.top.line(args);
-                if (pp && pp.isProof()) {
-                    this.onSelect(pp);
+                if (this.current.isBlock()) {
+                    this.onSelect(this.current.line(args));
                 }
                 else {
-                    this.error([
-                        'not a goalproof or subproof: ',
-                        '(', args, ')'
-                        ].join(''));
+                    this.error('select: ' + this.current.indexString() + ' is not a block');
                 }
                 
-                return pp;
+                return this.current;
             };
             
+            
             p.comment = function(text) {
-                try {
+                if (this.current.isBlock()) {
                     this.current.comment(text);
-                } catch (e) {
-                    this.error(e.toString());
+                }
+                else {
+                    this.error('comment: ' + this.current.indexString() + ' is not a block');
                 }
             };
             
             p.assume = function(P) {
-                this.current.assume(P);
+                if (this.current.isBlock()) {
+                    this.current.assume(P);
+                }
+                else {
+                    this.error('assume: ' + this.current.indexString() + ' is not a block');
+                }
             };
             
             p.from = function(P) {
-                this.current.from(P);
+                if (this.current.isBlock()) {
+                    this.current.from(P);
+                }
+                else {
+                    this.error('from: ' + this.current.indexString() + ' is not a block');
+                }
             };
             
             p.show = function(P) {
-                this.current.show(P);
+                if (this.current.isBlock()) {
+                    this.current.show(P);
+                }
+                else {
+                    this.error('show: ' + this.current.indexString() + ' is not a block');
+                }
             };
 
 
             p.intro = function(X,Y) {
-                this.current.intro(X,Y);
+                if (this.current.isBlock()) {
+                    this.current.intro(X,Y);
+                }
+                else {
+                    this.current.intro(this.current.getParent(),X,Y);
+                }
             };
             
             p.introLeft = function(X,Y) {
-                this.current.introLeft(X,Y);
+                if (this.current.isBlock()) {
+                    this.current.introLeft(X,Y);
+                }
+                else {
+                    this.current.introLeft(this.current.getParent(),X,Y);
+                }
             };
             
             p.introRight = function(X,Y) {
-                this.current.introRight(X,Y);
+                if (this.current.isBlock()) {
+                    this.current.introRight(X,Y);
+                }
+                else {
+                    this.current.introRight(this.current.getParent(),X,Y);
+                }
             };
             
             p.elim = function(X,Y) {
-                this.current.elim(X,Y);
+                if (this.current.isBlock()) {
+                    this.current.elim(X,Y);
+                }
+                else {
+                    this.current.elim(this.current.getParent(),X,Y);
+                }
             };
             
             p.elimLeft = function(X,Y) {
-                this.current.elimLeft(X,Y);
+                if (this.current.isBlock()) {
+                    this.current.elimLeft(X,Y);
+                }
+                else {
+                    this.current.elimLeft(this.current.getParent(),X,Y);
+                }
             };
             
             p.elimRight = function(X,Y) {
-                this.current.elimRight(X,Y);
+                if (this.current.isBlock()) {
+                    this.current.elimRight(X,Y);
+                }
+                else {
+                    this.current.elimRight(this.current.getParent(),X,Y);
+                }
             };
 
 
             p.close = function() {
-                this.current.close();
+                if (this.current.isBlock()) {
+                    this.current.close();
+                }
+                else {
+                    this.error('close: ' + this.current.indexString() + ' is not a block');
+                }
             };
 
 
@@ -206,6 +265,9 @@ btk.define({
                 if (this.terminal) {
                     this.terminal.error(msg);
                 }
+                else {
+                    throw new Error(msg);
+                }
             };
             
             p.setTerminal = function(terminal) {
@@ -225,19 +287,28 @@ btk.define({
             function parseWFF(ww) {
                 var ops = {
                     'not': function (ww) {
-                        return l.not(parseWFF(ww));
+                        var P = parseWFF(ww);
+                        return P? l.not(P): null;
                     },
                     'imp': function (ww) {
-                        return l.imp(parseWFF(ww), parseWFF(ww));
+                        var P = parseWFF(ww);
+                        var Q = parseWFF(ww);
+                        return (P && Q)? l.imp(P, Q): null;
                     },
                     'iff': function (ww) {
-                        return l.iff(parseWFF(ww), parseWFF(ww));
+                        var P = parseWFF(ww);
+                        var Q = parseWFF(ww);
+                        return (P && Q)? l.iff(P, Q): null;
                     },
                     'and': function (ww) {
-                        return l.and(parseWFF(ww), parseWFF(ww));
+                        var P = parseWFF(ww);
+                        var Q = parseWFF(ww);
+                        return (P && Q)? l.and(P, Q): null;
                     },
                     'or': function (ww) {
-                        return l.or(parseWFF(ww), parseWFF(ww));
+                        var P = parseWFF(ww);
+                        var Q = parseWFF(ww);
+                        return (P && Q)? l.or(P, Q): null;
                     }
                 };
                 
@@ -248,8 +319,11 @@ btk.define({
                 if (op) {
                     P = op(ww);
                 }
-                else {
+                else if (token && token.length > 0) {
                     P = l.prop(token);
+                }
+                else {
+                    P = null;
                 }
                 
                 return P;
@@ -272,12 +346,26 @@ btk.define({
                     self.select(ww);
                 },
                 
+                'up': function(self,w0,ww) {
+                    self.up();
+                },
+                
+                'home': function(self,w0,ww) {
+                    self.home();
+                },
+                
+                
+                'assume': function(self,w0,ww) {
+                    self.assume(parseWFF(ww));
+                },
+                
                 'from': function(self,w0,ww) {
                     self.from(parseWFF(ww));
                 },
                 'show': function(self,w0,ww) {
                     self.show(parseWFF(ww));
                 },
+                
                 
                 'intro': function(self,w0,ww) {
                     self.intro(parseWFF(ww),parseWFF(ww));
@@ -299,12 +387,18 @@ btk.define({
                     self.elimRight(parseWFF(ww),parseWFF(ww));
                 },
                 
+                
                 'comment': function(self,w0,ww) {
                     self.comment(ww.join(' '));
                 },
                 
+                'close': function(self,w0,ww) {
+                    self.close();
+                },
+                
+                
                 'wff': function(self,w0,ww) {
-                    var wff = parseWFF(ww);
+                    var wff = parseWFF(ww) || '<<null>>';
                     self.info(wff.toString());
                 },
                 'wffs': function(self,w0,ww) {
@@ -326,7 +420,7 @@ btk.define({
             p.processCommand = function(value) {
                 this.info('processing command: ' + value);
                 
-                var words = value.split(' ');
+                var words = value.trim().split(' ');
                 var word0 = words.shift();
                 var command = commands[word0] || commands['error'];
                 
@@ -335,6 +429,7 @@ btk.define({
                 }
                 catch(e) {
                         this.error(e.toString());
+                        throw e;
                 }
             };
             
@@ -344,80 +439,76 @@ btk.define({
             };
             
             p.offSelect = function() {
-                var proof = this.current;
+                var pelement = this.current;
                 
                 
-                var widgets = proof.widgets;
+                var widgets = pelement.widgets;
                 if (widgets) {
-                    var wframe = widgets.frame;
-                    wframe.view.classList.remove('selected');
+                    var wroot = widgets.root;
+                    wroot.view.classList.remove('selected');
                 }
             };
             
-            p.onSelect = function(proof) {
-                // assumes the parameter IS a proof
-                if (proof.isClosed()) {
+            p.onSelectBlock = function(block) {
+                this.info('onselectBlock: ' + block.indexString());
+                if (block.isClosed()) {
                     return;
                 }
                 
-                if (proof == this.current) {
+                if (block == this.current) {
                     return;
                 }
                 
                 this.offSelect();
                 
-                this.current = proof;
-                this.log(proof.textHead());
-                this.setPrompt(proof.indexString());
+                this.current = block;
+                this.log(block.textHead());
+                this.setPrompt(block.indexString());
                 
-                var widgets = proof.widgets;
+                var widgets = block.widgets;
                 if (widgets) {
-                    var wframe = widgets.frame;
-                    wframe.view.classList.add('selected');
+                    var wroot = widgets.root;
+                    wroot.view.classList.add('selected');
                 }
             };
             
-            p.onAppend = function(pelement) {
-                this.info('appended: ' + pelement.indexString());
-                var parent = pelement.getParent();
-                var widgets = parent.widgets;
+            p.onSelectStatement = function(statement) {
+                this.info('onselectStatement: ' + statement.indexString());
+                if (statement.getParent().isClosed()) {
+                    return;
+                }
                 
+                if (statement == this.current) {
+                    return;
+                }
+                
+                this.offSelect();
+                
+                this.current = statement;
+                this.log(statement.toText());
+                this.setPrompt(statement.indexString());
+                
+                var widgets = statement.widgets;
                 if (widgets) {
-                    var wbody = widgets.body;
-                    wbody.view.appendChild(de('wpline',pelement,this).create());
+                    var wroot = widgets.root;
+                    wroot.view.classList.add('selected');
                 }
             };
             
-            p.onAnnotation = function(pelement) {
-                this.info('annotated: ' + pelement.indexString());
-                var widgets = pelement.widgets;
-            
-                if (widgets) {
-                    var wstat = widgets.statement;
-                    if (wstat) {
-                        var wanno = widgets.annotation;
-                        if (wanno) {
-                            wstat.view.removeChild(wanno.view);
-                        }
-                        wanno = de('wplannotation',pelement)
-                        wstat.view.appendChild(wanno.create());
-                        widgets.annotation = wanno;
-                    }
+            p.onSelect = function(pelement) {
+                this.info('onselect: ' + pelement.indexString());
+                if (pelement.isBlock()) {
+                    this.onSelectBlock(pelement);
+                }
+                else if (pelement.isStatement()) {
+                    this.onSelectStatement(pelement);
+                }
+                else {
+                    this.message('onSelect: unrecognised element: ' + pelement.klass);
                 }
             };
             
             p.onClose = function(proof) {
-                this.info('closed: ' + proof.indexString());
-                var widgets = proof.widgets;
-                
-                if (widgets) {
-                    var whead = widgets.head;
-                    whead.view.classList.remove('open');
-                    
-                    var wframe = widgets.frame;
-                    wframe.view.classList.remove('selected');
-                }
-                
                 var p = proof;
                 while (p && p.isClosed()) {
                     p = p.getParent();
@@ -439,6 +530,7 @@ btk.define({
             var p = function() {
                 var args = [].slice.call(arguments,0);
                 
+                controller.home();
                 return controller.select(args);
             };
 
@@ -469,6 +561,10 @@ btk.define({
                 return controller;
             };
             
+            p.doit = function(command) {
+                p.controller().processCommand(command);
+            }
+            
             return p;
 
         })();
@@ -491,21 +587,24 @@ btk.define({
         t.PorQ = or('p', 'q');
         t.PtoQ = imp('p', 'q');
         
+        p.open('p0');
+        document.body.appendChild(de('wpview', p(), p.controller()).create())
+        
         p.open('p1');
         p.controller().show(imp(and('p','q'),'p'));
         p(0);
         p.controller().intro();
         
-        document.body.appendChild(de('wpview', p(), p.controller()).create())
-        
+        //document.body.appendChild(de('wpview', p(), p.controller()).create())
+        /*
         p.open('p2');
-        p.controller().show(imp(imp(or('p','q'),'r'),imp(and('p','q'),'r')));
+        p.doit('show imp imp or p q r imp and p q r');
         p(0);
-        p.controller().intro();
+        p.doit('intro');
         p(0,0,0);
-        p.controller().intro();
-        
-        document.body.appendChild(de('wpview', p(), p.controller()).create())
+        p.doit('intro');
+        */
+        //document.body.appendChild(de('wpview', p(), p.controller()).create())
         
         
         //---------------------------------------------------------

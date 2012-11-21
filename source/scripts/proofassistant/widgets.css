@@ -13,22 +13,30 @@ body {
     background-color: white;
 }
 
+.wpview {
+}
+
+.wptop {
+    min-height: 5em;
+}
+
 .wpconsole {
-    height: 15em;
+    height: 10em;
     background-color: lightsteelblue;
 }
 
 .wpframe {
+    padding: 0;
     border-width: 1px;
-    border-right: 0px;
+    border-right-width: 0px;
     border-style: solid;
     border-color: transparent;
 }
 .wpframe.selected {
-    border-color: rgba(0,0,0,0.125);
+    border-color: rgb(196,196,196);
 }
 .wpframe:hover {
-    border-color: rgba(0,0,0,0.125);
+    border-color: rgb(196,196,196);
 }
 
 .wphead {
@@ -50,10 +58,15 @@ body {
 
 .wpline {
     margin-bottom: 0.25em;
+    padding: 0;
 }
 
 .wplindex {
-
+    padding: 0;
+    border-width: 1px;
+    border-left-width: 0px;
+    border-style: solid;
+    border-color: transparent;
 }
 
 .wplgap {
@@ -61,14 +74,27 @@ body {
 }
 
 .wplstatement {
-    
+    padding: 0;
+    border-width: 1px;
+    border-right-width: 0px;
+    border-style: solid;
+    border-color: transparent;
+}
+.wplstatement.selected {
+    border-color: rgb(196,196,196);
 }
 .wplstatement:hover {
     background-color: rgba(0,0,0,0.125);
 }
 
+.wplproposition {
+    margin: 0;
+    padding: 0;
+}
 
 .wplannotation {
+    margin: 0;
+    padding: 0;
     color: gray;
     font-style: italic;
     font-size: 75%;

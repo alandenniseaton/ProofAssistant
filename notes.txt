@@ -1,6 +1,55 @@
 
 --------------------------------------------------------------------------------
+121120
+
+uncouple proofs and views
+    still need to handle selection events
+
+add
+	block folding
+	when annotation sources are hovered over, hilight the source statement
+
+errors
+	e.name = 'Language'
+	e.message = 'WTF!'
+	e.toString()
+	-> Language: WTF!
+	
+	? how do I catch thrown errors of a particular class
+		without having to catch all errors and rethrowing unhandled ones
+		
+view
+	add buttons for intro/elim commands
+	
+controller.onClose
+	should select a child of the next open sibling
+	
+refactor class hierarchy
+    Annotation
+	Element
+        Comment
+		Statement
+			Unary       *TODO
+				All
+				Some
+			Binary
+				Conditional
+				Conjunction
+				Disjunction
+		Block
+			TopBlock
+				Proof
+			SubBlock
+				FromBlock
+				ShowBlock
+				LetBlock    *TODO
+					ForAnyBlock
+					ForSomeBlock
+				
+		
+--------------------------------------------------------------------------------
 121118:2133
+
 add a slot proof element.
 will allow intro to work for constant propositions.
 
