@@ -8,9 +8,9 @@
 	"version": "0.1",
 
 	"icons": {
-		"16": "images/vm16.png",
-		"48": "images/vm48.png",
-		"128": "images/vm128.png"
+		"16": "images/proof16.png",
+		"48": "images/proof48.png",
+		"128": "images/proof128.png"
 	},
 	
 	"app": {

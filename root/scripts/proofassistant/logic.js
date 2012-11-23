@@ -344,8 +344,9 @@ btk.define({
         function Block() {
             Block.SUPERCLASS.call(this);
             
-            this.statements = [];
+            this.lines = [];
             this.tasks = {};
+            this.taskCount = 0;
             this.closed = false;
         }
         inherits(Block, Element);
@@ -364,27 +365,54 @@ btk.define({
             }
             
             p.getCurrent = function() {
-                var i = this.statements.length - 1;
+                var i = this.lines.length - 1;
                 
                 if (i < 0) {
                     throw this.error('getCurrent: empty Block');
                 }
                 
-                return this.statements[i];
+                return this.lines[i];
             };
             
             p.addTask = function(Block) {
                 this.tasks[Block.id] = Block;
+                this.taskCount++;
             };
             
             p.removeTask = function(Block) {
                 delete this.tasks[Block.id];
+                this.taskCount--;
+            };
+            
+            p.close = function() {
+                if (this.isClosed()) {
+                    throw this.error('close', 'already closed');
+                }
+                
+                if (this.taskCount !== 0) {
+                    throw this.error('close', 'pending tasks');
+                }
+                
+                this.closed = true;
+                
+                this.annotate([],'CLOSED');
+                
+                this.notify('close');
+
+
+                var parent = this.getParent();
+                
+                if (parent) {
+                    parent.removeTask(this);
+                }
+
+                return parent;
             };
             
             
             p.append = function(P) {
                 var Q = (P.isStatement() && P.isIndexed())? P.copy(): P;
-                var i = this.statements.push(Q);
+                var i = this.lines.push(Q);
                 
                 Q.setIndex(i-1);
                 Q.setParent(this);
@@ -402,7 +430,7 @@ btk.define({
             };
             
             p.find = function(P,i) {
-                var s = this.statements;
+                var s = this.lines;
                 
                 i = ifNumber(i, s.length-1);
                 while (i >= 0) {
@@ -453,6 +481,8 @@ btk.define({
                 this.append(fromblock);
                 fromblock.annotate([],'OPEN');
                 
+                this.addTask(fromblock);
+                
                 return fromblock;
             };
             
@@ -496,7 +526,7 @@ btk.define({
             };
             
             
-            p.line = function(i) {
+            p.selectLine = function(i) {
                 var ii;
                 
                 if (isNumber(i)) {
@@ -513,10 +543,10 @@ btk.define({
                 var j = 0;
                 var k;
                 var p = this;
-                while (j < l && p && p.statements) {
+                while (j < l && p && p.lines) {
                     k = ii[j];
-                    if (k < p.statements.length) {
-                        p = p.statements[k];
+                    if (k < p.lines.length) {
+                        p = p.lines[k];
                     }
                     else {
                         p = null;
@@ -535,7 +565,7 @@ btk.define({
             
             p.bodyToText = function() {
                 var body = [];
-                var s = this.statements;
+                var s = this.lines;
                 var l = s.length;
                 
                 for (var i=0; i<l; i++) {
@@ -599,6 +629,7 @@ btk.define({
                 
                 return this.publisher.subscribe(client);
             };
+            
         })(TopBlock.prototype);
         
         
@@ -679,13 +710,13 @@ btk.define({
             };
             
             p.getCurrent = function() {
-                var i = this.statements.length - 1;
+                var i = this.lines.length - 1;
                 
                 if (i < 0) {
                     return this.getRoot();
                 }
                 else {
-                    return this.statements[i];
+                    return this.lines[i];
                 }
             };
             
@@ -713,45 +744,34 @@ btk.define({
             
             // wanted to use 'export'
             // not allowed to
-            p.output = function(i) {
-                var O = this.statements[i] || this.getCurrent();
+            p.output = function() {
+                var O = this.getCurrent();
                 
                 var parent = this.getParent();
                 var P = new Conditional(this.getRoot(), O);
                 var Q = parent.find(P);
-                var R;
                 
                 this.exported = true;
                 
                 if (!Q) {
-                    R = parent.append(P);
-                    R.annotate([this,O],'Conditional introduction');
+                    Q = parent.append(P);
+                    Q.annotate([this],'Conditional introduction');
                 }
                 else {
                     throw this.error('export', 'already asserted: ' + P.toString());
                 }
                 
-                return R;
+                return Q;
             };
+
+            p.superClose = FromBlock.SUPER.close;
             
             p.close = function() {
-                if (this.isClosed()) {
-                    throw this.error('close', 'already closed');
-                }
+                var parent = this.superClose();
                 
                 if (!this.exported) {
                     this.output();
                 }
-                
-                var parent = this.getParent();
-                
-                parent.removeTask(this);
-                
-                this.removeAnnotation();
-                
-                this.closed = true;
-                
-                this.notify('close');
                 
                 return parent;
             };
@@ -786,6 +806,8 @@ btk.define({
             GoalBlock.SUPERCLASS.call(this);
             
             this.setTarget(target);
+            
+            this.shown = false;
         }
         inherits(GoalBlock, SubBlock);
         l.GoalBlock = GoalBlock;
@@ -809,13 +831,13 @@ btk.define({
             };
             
             p.getCurrent = function() {
-                var i = this.statements.length - 1;
+                var i = this.lines.length - 1;
                 
                 if (i < 0) {
                     return this.getTarget();
                 }
                 else {
-                    return this.statements[i];
+                    return this.lines[i];
                 }
             };
             
@@ -826,10 +848,13 @@ btk.define({
                     throw this.error('append','already closed');
                 }
                 
-                var Q = this.superAppend.call(this,P);
+                var Q = this.superAppend(P);
                 
                 if (Q.is(this.getTarget())) {
-                    this.close();
+                    this.shown = true;
+                    if (this.taskCount === 0) {
+                        this.close();
+                    }
                 }
                 
                 return Q;
@@ -841,33 +866,22 @@ btk.define({
             // 
             // p.find = function(P,i) {}
             
+            p.superClose = GoalBlock.SUPER.close;
+            
             p.close = function() {
-                if (this.isClosed()) {
-                    throw this.error('append','already closed');
-                }
-                
-                var parent = this.getParent();
-                var target = this.getTarget();
-                var current = this.getCurrent();
-                if (current.id != target.id && current.is(target)) {
-                    // the target should already be in the parent context
-                    // so do not need to add it
-                    this.closed = true;
-                    parent.removeTask(this);
-
-                    this.removeAnnotation();
-
-                    target.annotate([this],'shown');
-                    
-                    this.notify('close');
-
-                    return parent;
-                }
-                else {
+                if (!this.shown) {
                     throw this.error('close','target has not been shown');
                 }
                 
-                return this;
+                var parent = this.superClose();
+
+                // the target should already be in the parent context
+                // so do not need to add it
+
+                var target = this.getTarget();
+                target.annotate([this],'shown');
+
+                return parent;
             };
             
             p.textHead = function() {
@@ -1050,7 +1064,7 @@ btk.define({
                 var fromblock = block.from(this.left);
                 
                 fromblock.show(this.right);
-                fromblock.close();
+                fromblock.output();
                 
                 return block.getCurrent();
             };

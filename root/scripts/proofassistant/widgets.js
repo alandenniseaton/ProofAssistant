@@ -215,7 +215,7 @@ btk.define({
                 .klass('stretch')
                 ;
                 
-            var ss = proof.statements;
+            var ss = proof.lines;
             var l = ss.length;
             
             for(var i=0; i<l; i++) {

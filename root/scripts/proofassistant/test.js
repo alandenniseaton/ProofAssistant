@@ -92,6 +92,12 @@ btk.define({
                 'close': function(value) {
                     this.onClose(value.sender);
                 },
+                'append': function(value) {
+                    //do nothing
+                },
+                'annotate': function(value) {
+                    //do nothing
+                },
                 'default': function(value, message) {
                     this.info([
                         'default handler: ',
@@ -124,7 +130,7 @@ btk.define({
 
             p.select = function(args) {
                 if (this.current.isBlock()) {
-                    this.onSelect(this.current.line(args));
+                    this.onSelect(this.current.selectLine(args));
                 }
                 else {
                     this.error('select: ' + this.current.indexString() + ' is not a block');
@@ -450,7 +456,6 @@ btk.define({
             };
             
             p.onSelectBlock = function(block) {
-                this.info('onselectBlock: ' + block.indexString());
                 if (block.isClosed()) {
                     return;
                 }
@@ -473,7 +478,6 @@ btk.define({
             };
             
             p.onSelectStatement = function(statement) {
-                this.info('onselectStatement: ' + statement.indexString());
                 if (statement.getParent().isClosed()) {
                     return;
                 }
@@ -496,7 +500,6 @@ btk.define({
             };
             
             p.onSelect = function(pelement) {
-                this.info('onselect: ' + pelement.indexString());
                 if (pelement.isBlock()) {
                     this.onSelectBlock(pelement);
                 }
@@ -595,7 +598,8 @@ btk.define({
         p(0);
         p.controller().intro();
         
-        //document.body.appendChild(de('wpview', p(), p.controller()).create())
+        document.body.appendChild(de('wpview', p(), p.controller()).create())
+        
         /*
         p.open('p2');
         p.doit('show imp imp or p q r imp and p q r');
@@ -605,6 +609,8 @@ btk.define({
         p.doit('intro');
         */
         //document.body.appendChild(de('wpview', p(), p.controller()).create())
+        
+        p.open('p0');
         
         
         //---------------------------------------------------------
